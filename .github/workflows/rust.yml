@@ -46,8 +46,11 @@ jobs:
         echo "DATABASE_URL=$DATABASE_URL" > .env
         echo "RUST_LOG=info" >> .env
 
-    - name: Build
-      run: cargo build --verbose
+    - name: Build com debug
+      run: cargo build --verbose 2>&1 | tee build.log
+
+    - name: Exibir logs do build no GitHub Actions
+      run: cat build.log
 
     - name: Run tests
       run: cargo test --verbose
