@@ -1,22 +1,19 @@
-name: Rust CI
+name: Rust CI/CD
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
   pull_request:
-    branches: [ "main" ]
-
-env:
-  CARGO_TERM_COLOR: always
-  DATABASE_URL: "postgres://postgres:postgres@localhost:5432/postgres" # Altere conforme necessário
+    branches:
+      - main
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     services:
       postgres:
-        image: postgres:latest
+        image: postgres:15
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -30,30 +27,45 @@ jobs:
           --health-retries 5
 
     steps:
-    - uses: actions/checkout@v4
+      - name: Checkout código
+        uses: actions/checkout@v4
 
-    - name: Install system dependencies
-      run: sudo apt-get update && sudo apt-get install -y libssl-dev pkg-config
+      - name: Instalar Rust
+        uses: dtolnay/rust-toolchain@stable
 
-    - name: Set up Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        override: true
+      - name: Configurar cache do Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
-    - name: Create .env file
-      run: |
-        echo "DATABASE_URL=$DATABASE_URL" > .env
-        echo "RUST_LOG=info" >> .env
+      - name: Instalar dependências
+        run: cargo build --release
 
-    - name: Build com debug
-      run: cargo build --verbose 2>&1 | tee build.log
+      - name: Criar arquivo .env
+        run: |
+          echo "DRIVER=postgresql" >> .env
+          echo "USER=postgres" >> .env
+          echo "PASSWORD=postgres" >> .env
+          echo "HOST=localhost" >> .env
+          echo "PORT=5432" >> .env
+          echo "DATABASE=postgres" >> .env
+          echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres" >> .env
 
-    - name: Exibir logs do build no GitHub Actions
-      run: cat build.log
+      - name: Rodar migrações (se houver)
+        run: cargo install sqlx-cli && sqlx database setup
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
 
-    - name: Run tests
-      run: cargo test --verbose
+      - name: Rodar testes
+        run: cargo test
 
-    - name: Run the project
-      run: cargo run
+      - name: Rodar aplicação
+        run: cargo run
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
