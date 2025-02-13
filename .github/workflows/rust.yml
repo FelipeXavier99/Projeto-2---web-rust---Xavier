@@ -57,6 +57,13 @@ jobs:
           echo "DATABASE=postgres" >> .env
           echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres" >> .env
 
+      - name: Esperar o banco estar pronto
+        run: until pg_isready -h localhost -p 5432; do sleep 1; done
+
+      - name: Testar conexão com o banco
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d postgres -c "SELECT 1;"
+
       - name: Rodar migrações (se houver)
         run: cargo install sqlx-cli && sqlx database setup
         env:
@@ -64,8 +71,17 @@ jobs:
 
       - name: Rodar testes
         run: cargo test
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+
+      - name: Verificar variável DATABASE_URL
+        run: echo "DATABASE_URL=${DATABASE_URL}"
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
 
       - name: Rodar aplicação
         run: cargo run
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+          USER: postgres
+          PASSWORD: postgres
